@@ -41,5 +41,98 @@ public class BufferPoolManager
         return _page;
     }
 
-   
+    /// <summary>
+    /// Execute SELECT query
+    /// </summary>
+    public List<Dictionary<string, object>> SelectRows(SqlParser parser)
+    {
+        var data = ReadOrWriteOnDisk();
+        
+        if (!data.Rows.ContainsKey(parser.Table))
+        {
+            return new List<Dictionary<string, object>>();
+        }
+
+        var rows = data.Rows[parser.Table];
+
+        // SELECT * - return all columns
+        if (parser.Keys.Count == 0)
+        {
+            return rows;
+        }
+
+        // SELECT specific columns
+        var selectedRows = new List<Dictionary<string, object>>();
+        foreach (var row in rows)
+        {
+            var obj = new Dictionary<string, object>();
+            foreach (var key in parser.Keys)
+            {
+                if (row.ContainsKey(key))
+                {
+                    obj[key] = row[key];
+                }
+            }
+            selectedRows.Add(obj);
+        }
+
+        return selectedRows;
+    }
+
+    /// <summary>
+    /// Execute INSERT query
+    /// </summary>
+    public void InsertRow(SqlParser parser)
+    {
+        var data = ReadOrWriteOnDisk();
+        var tableSchema = data.Tables[parser.Table];
+        var obj = new Dictionary<string, object>();
+
+        for (int i = 0; i < parser.Keys.Count; i++)
+        {
+            var key = parser.Keys[i];
+            var value = parser.Values[i];
+            var fieldType = tableSchema[key];
+            
+            obj[key] = ParseType(value, fieldType);
+        }
+
+        if (!_page.Rows.ContainsKey(parser.Table))
+        {
+            _page.Rows[parser.Table] = new List<Dictionary<string, object>>();
+        }
+
+        _page.Rows[parser.Table].Add(obj);
+        _isDirty = true;
+    }
+
+    /// <summary>
+    /// Execute CREATE TABLE query
+    /// </summary>
+    public void CreateTable(SqlParser parser)
+    {
+        var obj = new Dictionary<string, string>();
+
+        for (int i = 0; i < parser.Keys.Count; i++)
+        {
+            obj[parser.Keys[i]] = parser.KeyTypes[i];
+        }
+
+        _page.Tables[parser.Table] = obj;
+        _isDirty = true;
+    }
+
+    /// <summary>
+    /// Parse value to appropriate type based on schema
+    /// </summary>
+    private object ParseType(string fieldValue, string fieldType)
+    {
+        return fieldType.ToUpper() switch
+        {
+            "INT" => int.Parse(fieldValue),
+            "FLOAT" => double.Parse(fieldValue),
+            "VARCHAR" => fieldValue.Trim('\''),
+            _ => fieldValue
+        };
+    }
 }
