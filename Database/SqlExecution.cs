@@ -23,6 +23,7 @@ public class SqlExecution
             "SELECT" => HandleSelect(parser),
             "CREATE" => HandleCreateTable(parser),
             "INSERT" => HandleInsert(parser),
+            "DROP" => HandleDropTable(parser),
             _ => "Error: Unknown command"
         };
     }
@@ -37,6 +38,12 @@ public class SqlExecution
     {
         _buffer.CreateTable(parser);
         return "OK: New Table Created !";
+    }
+
+    private string HandleDropTable(SqlParser parser)
+    {
+        _buffer.DropTable(parser);
+        return "OK: Table Dropped !";
     }
 
     private List<Dictionary<string, object>> HandleSelect(SqlParser parser)
