@@ -123,6 +123,24 @@ public class BufferPoolManager
     }
 
     /// <summary>
+    /// Execute DROP TABLE query
+    /// </summary>
+    public void DropTable(SqlParser parser)
+    {
+        if (_page.Tables.ContainsKey(parser.Table))
+        {
+            _page.Tables.Remove(parser.Table);
+        }
+
+        if (_page.Rows.ContainsKey(parser.Table))
+        {
+            _page.Rows.Remove(parser.Table);
+        }
+        
+        _isDirty = true;
+    }
+
+    /// <summary>
     /// Parse value to appropriate type based on schema
     /// </summary>
     private object ParseType(string fieldValue, string fieldType)
