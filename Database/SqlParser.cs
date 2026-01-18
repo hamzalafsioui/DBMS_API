@@ -29,6 +29,9 @@ public class SqlParser
             case "INSERT":
                 ParseInsert(tokens);
                 break;
+            case "DROP":
+                ParseDropTable(tokens);
+                break;
             default:
                 throw new Exception($"Invalid Method: {MethodType}");
         }
@@ -87,6 +90,16 @@ public class SqlParser
             Keys.Add(parts[0]);
             KeyTypes.Add(parts[1]);
         }
+
+    }
+
+    /// <summary>
+    /// Parse DROP TABLE query
+    /// Example: DROP TABLE users;
+    /// </summary>
+    private void ParseDropTable(string[] tokens)
+    {
+        Table = tokens[2].TrimEnd(';');
     }
 
     /// <summary>
