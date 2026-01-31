@@ -15,7 +15,25 @@ public class DbClientService
         _port = port;
     }
 
-   
+    private string Serialize(Dictionary<string, object> obj)
+    {
+        var sb = new StringBuilder();
+        foreach (var kvp in obj)
+        {
+            var value = kvp.Value;
+            if (value is List<Dictionary<string, object>> list)
+            {
+                value = JsonSerializer.Serialize(list);
+            }
+            else if (value is Dictionary<string, object> dict)
+            {
+                value = JsonSerializer.Serialize(dict);
+            }
+            sb.AppendLine($"{kvp.Key}:>{value}");
+        }
+        return sb.ToString();
+    }
+
    
     
 }
