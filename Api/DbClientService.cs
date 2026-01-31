@@ -34,6 +34,23 @@ public class DbClientService
         return sb.ToString();
     }
 
-   
+    private Dictionary<string, string> Deserialize(string body)
+    {
+        var obj = new Dictionary<string, string>();
+        var lines = body.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        
+        foreach (var line in lines)
+        {
+            var separatorIndex = line.IndexOf(":>");
+            if (separatorIndex > 0)
+            {
+                var key = line.Substring(0, separatorIndex);
+                var value = line.Substring(separatorIndex + 2).Trim();
+                obj[key] = value;
+            }
+        }
+        return obj;
+    }
+
     
 }
