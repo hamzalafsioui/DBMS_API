@@ -94,15 +94,30 @@ public class SqlParser
     /// </summary>
     private void ParseInsert(string[] tokens)
     {
-        Table = tokens[2];
+        // Combine tokens to get a full string for regex matching, but tokens already had spaces around operators
+        string fullQuery = string.Join(" ", tokens);
         
-        // Extract keys from parentheses
-        string keysStr = tokens[3].TrimStart('(').TrimEnd(')');
-        Keys = keysStr.Split(',').ToList();
+        var match = Regex.Match(fullQuery, @"INSERT\s+INTO\s+(\w+)\s*\((.*?)\)\s*VALUES\s*\((.*)\)", RegexOptions.IgnoreCase);
         
-        // Extract values from the last token
-        string valuesStr = tokens[^1].TrimStart('(').TrimEnd(')', ';');
+        if (!match.Success)
+        {
+            throw new Exception("Invalid INSERT syntax. Expected: INSERT INTO table (cols) VALUES (vals);");
+        }
+
+        Table = match.Groups[1].Value;
+        
+        // Extract keys
+        string keysStr = match.Groups[2].Value;
+        Keys = keysStr.Split(',').Select(k => k.Trim()).ToList();
+        
+        // Extract values
+        string valuesStr = match.Groups[3].Value.TrimEnd(';', ' ', ')');
         Values = ParseValues(valuesStr);
+
+        if (Keys.Count != Values.Count)
+        {
+            throw new Exception($"Column count ({Keys.Count}) does not match value count ({Values.Count}).");
+        }
     }
 
     /// <summary>
@@ -111,19 +126,25 @@ public class SqlParser
     /// </summary>
     private void ParseCreateTable(string[] tokens)
     {
-        Table = tokens[2];
-        
-        // Join remaining tokens and extract field definitions
-        string fieldsStr = string.Join(" ", tokens.Skip(3));
-        fieldsStr = fieldsStr.TrimStart('(').TrimEnd(')', ';');
-        
+        string fullQuery = string.Join(" ", tokens);
+        var match = Regex.Match(fullQuery, @"CREATE\s+TABLE\s+(\w+)\s*\((.*)\)", RegexOptions.IgnoreCase);
+
+        if (!match.Success)
+        {
+            throw new Exception("Invalid CREATE TABLE syntax. Expected: CREATE TABLE table (col type, ...);");
+        }
+
+        Table = match.Groups[1].Value;
+        string fieldsStr = match.Groups[2].Value.TrimEnd(';', ' ', ')');
+
         foreach (var field in fieldsStr.Split(','))
         {
-            var parts = field.Trim().Split(' ');
+            var parts = field.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2) continue;
+            
             Keys.Add(parts[0]);
             KeyTypes.Add(parts[1]);
         }
-
     }
 
     /// <summary>
