@@ -1,0 +1,222 @@
+:root {
+  --bg-color: #0d1117;
+  --surface-color: #161b22;
+  --border-color: #30363d;
+  --text-primary: #c9d1d9;
+  --text-secondary: #8b949e;
+  --accent-color: #58a6ff;
+  --accent-glow: rgba(88, 166, 255, 0.3);
+  --success-color: #3fb950;
+  --error-color: #f85149;
+  --mono-font: "JetBrains Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Inter", sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  line-height: 1.6;
+  padding: 2rem;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.container {
+  width: 100%;
+  max-width: 1000px;
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+h1 {
+  font-family: "Outfit", sans-serif;
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+  color: #fff;
+  text-align: center;
+  background: linear-gradient(90deg, #fff, var(--accent-color));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.input-card {
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+input[type="text"],
+textarea {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #0d1117;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--mono-font);
+  font-size: 0.9rem;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+input[type="text"]:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+textarea {
+  height: 120px;
+  resize: vertical;
+}
+
+.controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+button {
+  padding: 0.75rem 1.5rem;
+  font-family: "Outfit", sans-serif;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    transform 0.1s,
+    opacity 0.2s;
+  border: none;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background-color: var(--accent-color);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.result-card {
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  min-height: 100px;
+  overflow-x: auto;
+}
+
+.status-message {
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+  display: none;
+}
+
+.status-success {
+  background-color: rgba(63, 185, 80, 0.1);
+  color: var(--success-color);
+  border: 1px solid rgba(63, 185, 80, 0.3);
+}
+
+.status-error {
+  background-color: rgba(248, 81, 73, 0.1);
+  color: var(--error-color);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th {
+  background-color: #21262d;
+  color: var(--text-primary);
+  text-align: left;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  font-weight: 600;
+}
+
+td {
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+tr:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.json-raw {
+  white-space: pre-wrap;
+  font-family: var(--mono-font);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: #0d1117;
+  padding: 1rem;
+  border-radius: 6px;
+}
+
+.loader {
+  display: none;
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 1rem auto;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

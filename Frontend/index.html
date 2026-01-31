@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DBMS Web Interface</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="container">
+      <h1>DBMS Explorer</h1>
+
+      <div class="input-card">
+        <div class="form-group">
+          <label for="dbName">Database Name</label>
+          <input
+            type="text"
+            id="dbName"
+            value="testdb"
+            placeholder="e.g. testdb"
+          />
+        </div>
+        <div class="form-group">
+          <label for="query">SQL Query</label>
+          <textarea id="query" placeholder="SELECT * FROM users;"></textarea>
+        </div>
+        <div class="controls">
+          <div id="loader" class="loader"></div>
+          <button id="executeBtn" class="btn-primary">Execute Query</button>
+        </div>
+      </div>
+
+      <div id="status" class="status-message"></div>
+
+      <div class="result-card" id="resultCard">
+        <div
+          id="resultContent"
+          style="color: var(--text-secondary); text-align: center"
+        >
+          No results to display. Execute a query to see data.
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
