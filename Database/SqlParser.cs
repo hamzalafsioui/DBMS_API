@@ -64,27 +64,35 @@ public class SqlParser
     /// </summary>
     private void ParseSelect(string[] tokens)
     {
-        // Find WHERE keyword if it exists
-        int whereIndex = Array.FindIndex(tokens, t => t.Equals("WHERE", StringComparison.OrdinalIgnoreCase));
-        
-        if (whereIndex > 0)
+        string fullQuery = string.Join(" ", tokens);
+        var match = Regex.Match(fullQuery, @"SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.*))?", RegexOptions.IgnoreCase);
+
+        if (match.Success)
         {
-            // Table is between FROM and WHERE
-            Table = tokens[whereIndex - 1];
-            
-            // Parse WHERE conditions
-            ParseWhereConditions(tokens, whereIndex + 1);
+            Table = match.Groups[2].Value.Trim().TrimEnd(';');
+            string cols = match.Groups[1].Value.Trim();
+            if (cols != "*")
+            {
+                Keys = cols.Split(',').Select(k => k.Trim()).Where(k => !string.IsNullOrEmpty(k)).ToList();
+            }
+
+            if (match.Groups[3].Success)
+            {
+                int whereIndex = Array.FindIndex(tokens, t => t.Equals("WHERE", StringComparison.OrdinalIgnoreCase));
+                if (whereIndex > 0)
+                {
+                    ParseWhereConditions(tokens, whereIndex + 1);
+                }
+            }
         }
         else
         {
-            // Table is the last token (may have semicolon)
+            // Fallback for simple SELECT * FROM users
             Table = tokens[^1].TrimEnd(';');
-        }
-        
-        // If not selecting all columns
-        if (tokens[1] != "*")
-        {
-            Keys = tokens[1].Split(',').ToList();
+            if (tokens.Length > 1 && tokens[1] != "*")
+            {
+                Keys = tokens[1].Split(',').Select(k => k.Trim()).Where(k => !string.IsNullOrEmpty(k)).ToList();
+            }
         }
     }
 
@@ -142,8 +150,8 @@ public class SqlParser
             var parts = field.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 2) continue;
             
-            Keys.Add(parts[0]);
-            KeyTypes.Add(parts[1]);
+            Keys.Add(parts[0].Trim());
+            KeyTypes.Add(parts[1].Trim());
         }
     }
 
@@ -238,9 +246,10 @@ public class SqlParser
             }
         }
         
-        if (!string.IsNullOrEmpty(current))
+        string lastValue = current.Trim();
+        if (lastValue.Length > 0 || result.Count > 0)
         {
-            result.Add(current.Trim());
+            result.Add(lastValue);
         }
 
         return result;
