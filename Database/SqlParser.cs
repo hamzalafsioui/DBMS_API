@@ -192,7 +192,44 @@ public class SqlParser
                 continue;
             }
             
-            // Parse condition: column operator value
+            // Check for IS NULL / IS NOT NULL (2 or 3 tokens)
+            if (i + 1 < conditionTokens.Count && conditionTokens[i + 1].Equals("IS", StringComparison.OrdinalIgnoreCase))
+            {
+                // IS NULL
+                if (i + 2 < conditionTokens.Count && conditionTokens[i + 2].Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                {
+                    // column IS NULL
+                    WhereConditions.Add(new WhereCondition
+                    {
+                        Column = conditionTokens[i],
+                        Operator = "IS NULL",
+                        Value = "null",
+                        LogicalOperator = currentLogicalOp
+                    });
+                    i += 3;
+                    currentLogicalOp = "";
+                    continue;
+                }
+                // IS NOT NULL 
+                else if (i + 3 < conditionTokens.Count && 
+                         conditionTokens[i + 2].Equals("NOT", StringComparison.OrdinalIgnoreCase) && 
+                         conditionTokens[i + 3].Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                {
+                    // column IS NOT NULL
+                    WhereConditions.Add(new WhereCondition
+                    {
+                        Column = conditionTokens[i],
+                        Operator = "IS NOT NULL",
+                        Value = "null",
+                        LogicalOperator = currentLogicalOp
+                    });
+                    i += 4;
+                    currentLogicalOp = "";
+                    continue;
+                }
+            }
+
+            // Parse standard condition: column operator value
             if (i + 2 < conditionTokens.Count)
             {
                 var condition = new WhereCondition
