@@ -54,8 +54,14 @@ public class BufferPoolManager
         }
 
         var rows = data.Rows[parser.Table];
+        
+        // Apply WHERE conditions if present
+        if (parser.WhereConditions.Count > 0)
+        {
+            rows = FilterRowsByWhereConditions(rows, parser.WhereConditions, data.Tables[parser.Table]);
+        }
 
-        // SELECT * - return all columns
+        // SELECT * => return all columns
         if (parser.Keys.Count == 0)
         {
             return rows;
@@ -85,16 +91,37 @@ public class BufferPoolManager
     public void InsertRow(SqlParser parser)
     {
         var data = ReadOrWriteOnDisk();
+        
+        if (!data.Tables.ContainsKey(parser.Table))
+        {
+            throw new Exception($"Table '{parser.Table}' does not exist.");
+        }
+
         var tableSchema = data.Tables[parser.Table];
         var obj = new Dictionary<string, object>();
 
+        // Map provided values for easy lookup
+        var providedData = new Dictionary<string, string>();
         for (int i = 0; i < parser.Keys.Count; i++)
         {
-            var key = parser.Keys[i];
-            var value = parser.Values[i];
-            var fieldType = tableSchema[key];
-            
-            obj[key] = ParseType(value, fieldType);
+            providedData[parser.Keys[i]] = parser.Values[i];
+        }
+
+        // Iterate through ALL schema columns to ensure distinct rows
+        foreach (var column in tableSchema)
+        {
+            string colName = column.Key;
+            string colType = column.Value;
+
+            if (providedData.ContainsKey(colName))
+            {
+                obj[colName] = ParseType(providedData[colName], colType);
+            }
+            else
+            {
+                // Insert NULL if column is missing in the INSERT statement
+                obj[colName] = null;
+            }
         }
 
         if (!_page.Rows.ContainsKey(parser.Table))
@@ -104,6 +131,7 @@ public class BufferPoolManager
 
         _page.Rows[parser.Table].Add(obj);
         _isDirty = true;
+        ReadOrWriteOnDisk();
     }
 
     /// <summary>
@@ -120,6 +148,7 @@ public class BufferPoolManager
 
         _page.Tables[parser.Table] = obj;
         _isDirty = true;
+        ReadOrWriteOnDisk();
     }
 
     /// <summary>
@@ -138,6 +167,146 @@ public class BufferPoolManager
         }
         
         _isDirty = true;
+        ReadOrWriteOnDisk();
+    }
+
+    /// <summary>
+    /// Filter rows based on WHERE conditions
+    /// </summary>
+    private List<Dictionary<string, object>> FilterRowsByWhereConditions(
+        List<Dictionary<string, object>> rows, 
+        List<WhereCondition> conditions,
+        Dictionary<string, string> tableSchema)
+    {
+        var filteredRows = new List<Dictionary<string, object>>();
+
+        foreach (var row in rows)
+        {
+            bool? previousResult = null;
+
+            foreach (var condition in conditions)
+            {
+                bool conditionResult = EvaluateCondition(row, condition, tableSchema);
+
+                if (previousResult == null)
+                {
+                    // First condition
+                    previousResult = conditionResult;
+                }
+                else
+                {
+                    // Apply logical operator from CURRENT condition
+                    if (condition.LogicalOperator == "AND")
+                    {
+                        previousResult = previousResult.Value && conditionResult;
+                    }
+                    else if (condition.LogicalOperator == "OR")
+                    {
+                        previousResult = previousResult.Value || conditionResult;
+                    }
+                }
+            }
+
+            bool includeRow = previousResult ?? true;
+
+            if (includeRow)
+            {
+                filteredRows.Add(row);
+            }
+        }
+
+        return filteredRows;
+    }
+
+    /// <summary>
+    /// Evaluate a single WHERE condition
+    /// </summary>
+    private bool EvaluateCondition(
+        Dictionary<string, object> row, 
+        WhereCondition condition,
+        Dictionary<string, string> tableSchema)
+    {
+        if (!row.ContainsKey(condition.Column))
+        {
+            return false;
+        }
+
+        if (!tableSchema.ContainsKey(condition.Column))
+        {
+            // Schema mismatch or invalid column
+            return false;
+        }
+
+        var columnValue = row[condition.Column];
+
+        // Handle NULL values (comparisons with NULL return false)
+        if (columnValue == null)
+        {
+             return false;
+        }
+
+        var fieldType = tableSchema[condition.Column];
+        var conditionValue = ParseType(condition.Value, fieldType);
+
+        return condition.Operator switch
+        {
+            "=" => CompareValues(columnValue, conditionValue) == 0,
+            "!=" => CompareValues(columnValue, conditionValue) != 0,
+            ">" => CompareValues(columnValue, conditionValue) > 0,
+            "<" => CompareValues(columnValue, conditionValue) < 0,
+            ">=" => CompareValues(columnValue, conditionValue) >= 0,
+            "<=" => CompareValues(columnValue, conditionValue) <= 0,
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Compare two values of the same type
+    /// </summary>
+    private int CompareValues(object value1, object value2)
+    {
+        // Handle JsonElement from disk deserialization
+        if (value1 is JsonElement json1)
+        {
+            try 
+            {
+                if (value2 is int) value1 = json1.GetInt32();
+                else if (value2 is double) value1 = json1.GetDouble();
+                else if (value2 is string) value1 = json1.GetString() ?? string.Empty;
+            }
+            catch
+            {
+                // If conversion fails => Fallback: convert both to string if types mismatch
+                return string.Compare(value1?.ToString(), value2?.ToString(), StringComparison.Ordinal);
+
+            }
+        }
+
+        // Handle numeric conversions (e.g. int vs double)
+        if (value1 is int i1 && value2 is double d2)
+        {
+            return ((double)i1).CompareTo(d2);
+        }
+        if (value1 is double d1 && value2 is int i2)
+        {
+            return d1.CompareTo((double)i2);
+        }
+
+        if (value1 is int int1 && value2 is int int2)
+        {
+            return int1.CompareTo(int2);
+        }
+        else if (value1 is double double1 && value2 is double double2)
+        {
+            return double1.CompareTo(double2);
+        }
+        else if (value1 is string str1 && value2 is string str2)
+        {
+            return string.Compare(str1, str2, StringComparison.Ordinal);
+        }
+        
+        // Fallback: convert both to string if types mismatch
+        return string.Compare(value1?.ToString(), value2?.ToString(), StringComparison.Ordinal);
     }
 
     /// <summary>
