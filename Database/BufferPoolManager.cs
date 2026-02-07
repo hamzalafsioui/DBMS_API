@@ -48,6 +48,11 @@ public class BufferPoolManager
     {
         var data = ReadOrWriteOnDisk();
         
+        if (!data.Tables.ContainsKey(parser.Table))
+        {
+            throw new Exception($"Table '{parser.Table}' does not exist.");
+        }
+
         if (!data.Rows.ContainsKey(parser.Table))
         {
             return new List<Dictionary<string, object>>();
