@@ -244,7 +244,17 @@ public class BufferPoolManager
 
         var columnValue = row[condition.Column];
 
-        // Handle NULL values (comparisons with NULL return false)
+        // Handle IS NULL and IS NOT NULL operators
+        if (condition.Operator == "IS NULL")
+        {
+            return columnValue == null;
+        }
+        if (condition.Operator == "IS NOT NULL")
+        {
+            return columnValue != null;
+        }
+
+        // Handle NULL values for standard comparisons (comparisons with NULL return false)
         if (columnValue == null)
         {
              return false;
