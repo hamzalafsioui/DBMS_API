@@ -176,6 +176,96 @@ public class BufferPoolManager
     }
 
     /// <summary>
+    /// Execute DELETE query
+    /// </summary>
+    public int DeleteRows(SqlParser parser)
+    {
+        var data = ReadOrWriteOnDisk();
+        
+        if (!data.Tables.ContainsKey(parser.Table))
+        {
+            throw new Exception($"Table '{parser.Table}' does not exist.");
+        }
+
+        if (!data.Rows.ContainsKey(parser.Table))
+        {
+            return 0; // No rows to delete
+        }
+
+        var rows = data.Rows[parser.Table];
+        int originalCount = rows.Count;
+
+        // If no WHERE conditions => delete all rows -)
+        if (parser.WhereConditions.Count == 0)
+        {
+            _page.Rows[parser.Table].Clear();
+            _isDirty = true;
+            ReadOrWriteOnDisk();
+            return originalCount;
+        }
+
+        // Filter rows to keep (inverse of rows to delete)
+        var rowsToKeep = new List<Dictionary<string, object>>();
+        var tableSchema = data.Tables[parser.Table];
+
+        foreach (var row in rows)
+        {
+            bool matchesConditions = EvaluateAllConditions(row, parser.WhereConditions, tableSchema);
+            
+            // Keep rows that DON'T match the WHERE conditions
+            if (!matchesConditions)
+            {
+                rowsToKeep.Add(row);
+            }
+        }
+
+        int deletedCount = originalCount - rowsToKeep.Count;
+
+        if (deletedCount > 0)
+        {
+            _page.Rows[parser.Table] = rowsToKeep;
+            _isDirty = true;
+            ReadOrWriteOnDisk();
+        }
+
+        return deletedCount;
+    }
+
+    /// <summary>
+    /// Evaluate all WHERE conditions for a single row
+    /// </summary>
+    private bool EvaluateAllConditions(
+        Dictionary<string, object> row,
+        List<WhereCondition> conditions,
+        Dictionary<string, string> tableSchema)
+    {
+        bool? previousResult = null;
+
+        foreach (var condition in conditions)
+        {
+            bool conditionResult = EvaluateCondition(row, condition, tableSchema);
+
+            if (previousResult == null)
+            {
+                previousResult = conditionResult;
+            }
+            else
+            {
+                if (condition.LogicalOperator == "AND")
+                {
+                    previousResult = previousResult.Value && conditionResult;
+                }
+                else if (condition.LogicalOperator == "OR")
+                {
+                    previousResult = previousResult.Value || conditionResult;
+                }
+            }
+        }
+
+        return previousResult ?? true;
+    }
+
+    /// <summary>
     /// Filter rows based on WHERE conditions
     /// </summary>
     private List<Dictionary<string, object>> FilterRowsByWhereConditions(
