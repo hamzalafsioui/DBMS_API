@@ -49,6 +49,9 @@ public class SqlParser
             case "DROP":
                 ParseDropTable(tokens);
                 break;
+            case "DELETE":
+                ParseDelete(tokens);
+                break;
             default:
                 throw new Exception($"Invalid Method: {MethodType}");
         }
@@ -162,6 +165,36 @@ public class SqlParser
     private void ParseDropTable(string[] tokens)
     {
         Table = tokens[2].TrimEnd(';');
+    }
+
+    /// <summary>
+    /// Parse DELETE query
+    /// Examples:
+    ///   DELETE FROM users;
+    ///   DELETE FROM users WHERE age > 20;
+    ///   DELETE FROM users WHERE age >= 18 AND salary < 2000.0;
+    /// </summary>
+    private void ParseDelete(string[] tokens)
+    {
+        string fullQuery = string.Join(" ", tokens);
+        var match = Regex.Match(fullQuery, @"DELETE\s+FROM\s+(\w+)(?:\s+WHERE\s+(.*))?" , RegexOptions.IgnoreCase);
+
+        if (!match.Success)
+        {
+            throw new Exception("Invalid DELETE syntax. Expected: DELETE FROM table [WHERE conditions];");
+        }
+
+        Table = match.Groups[1].Value.Trim().TrimEnd(';');
+
+        // Parse WHERE conditions if present
+        if (match.Groups[2].Success)
+        {
+            int whereIndex = Array.FindIndex(tokens, t => t.Equals("WHERE", StringComparison.OrdinalIgnoreCase));
+            if (whereIndex > 0)
+            {
+                ParseWhereConditions(tokens, whereIndex + 1);
+            }
+        }
     }
 
     /// <summary>
