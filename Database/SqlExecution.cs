@@ -25,6 +25,7 @@ public class SqlExecution
             "INSERT" => HandleInsert(parser),
             "DROP" => HandleDropTable(parser),
             "DELETE" => HandleDelete(parser),
+            "UPDATE" => HandleUpdate(parser),
             _ => "Error: Unknown command"
         };
     }
@@ -51,6 +52,12 @@ public class SqlExecution
     {
         int deletedCount = _buffer.DeleteRows(parser);
         return $"OK: {deletedCount} Row(s) Deleted !";
+    }
+
+    private string HandleUpdate(SqlParser parser)
+    {
+        int updatedCount = _buffer.UpdateRows(parser);
+        return $"OK: {updatedCount} Row(s) Updated !";
     }
 
     private List<Dictionary<string, object>> HandleSelect(SqlParser parser)
