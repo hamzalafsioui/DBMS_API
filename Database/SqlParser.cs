@@ -52,6 +52,9 @@ public class SqlParser
             case "DELETE":
                 ParseDelete(tokens);
                 break;
+            case "UPDATE":
+                ParseUpdate(tokens);
+                break;
             default:
                 throw new Exception($"Invalid Method: {MethodType}");
         }
@@ -194,6 +197,96 @@ public class SqlParser
             {
                 ParseWhereConditions(tokens, whereIndex + 1);
             }
+        }
+    }
+
+    /// <summary>
+    /// Parse UPDATE query
+    /// Examples:
+    ///   UPDATE users SET age = 25;
+    ///   UPDATE users SET age = 25, salary = 2000.0 WHERE username = 'hamza';
+    ///   UPDATE users SET salary = 1500.0 WHERE age > 20 AND salary < 1000.0;
+    /// </summary>
+    private void ParseUpdate(string[] tokens)
+    {
+        string fullQuery = string.Join(" ", tokens);
+        var match = Regex.Match(fullQuery, @"UPDATE\s+(\w+)\s+SET\s+(.*?)(?:\s+WHERE\s+(.*))?$", RegexOptions.IgnoreCase);
+
+        if (!match.Success)
+        {
+            throw new Exception("Invalid UPDATE syntax. Expected: UPDATE table SET col1=val1, col2=val2 [WHERE conditions];");
+        }
+
+        Table = match.Groups[1].Value.Trim();
+        string setClause = match.Groups[2].Value.Trim();
+
+        // Parse SET clause: col1 = val1, col2 = val2
+        ParseSetClause(setClause);
+
+        // Parse WHERE conditions if present
+        if (match.Groups[3].Success)
+        {
+            int whereIndex = Array.FindIndex(tokens, t => t.Equals("WHERE", StringComparison.OrdinalIgnoreCase));
+            if (whereIndex > 0)
+            {
+                ParseWhereConditions(tokens, whereIndex + 1);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Parse SET clause from UPDATE query
+    /// Example: age = 25, salary = 2000.0
+    /// </summary>
+    private void ParseSetClause(string setClause)
+    {
+        // Remove trailing semicolon if present
+        setClause = setClause.TrimEnd(';', ' ');
+
+        // Split by comma , 
+        var assignments = new List<string>();
+        var current = "";
+        bool inQuotes = false;
+
+        foreach (char c in setClause)
+        {
+            if (c == '\'' && !inQuotes)
+            {
+                inQuotes = true;
+                current += c;
+            }
+            else if (c == '\'' && inQuotes)
+            {
+                inQuotes = false;
+                current += c;
+            }
+            else if (c == ',' && !inQuotes)
+            {
+                assignments.Add(current.Trim());
+                current = "";
+            }
+            else
+            {
+                current += c;
+            }
+        }
+
+        if (current.Trim().Length > 0)
+        {
+            assignments.Add(current.Trim());
+        }
+
+        // Parse each assignment: column = value
+        foreach (var assignment in assignments)
+        {
+            var parts = assignment.Split('=', 2);
+            if (parts.Length != 2)
+            {
+                throw new Exception($"Invalid SET clause: {assignment}");
+            }
+
+            Keys.Add(parts[0].Trim());
+            Values.Add(parts[1].Trim());
         }
     }
 
