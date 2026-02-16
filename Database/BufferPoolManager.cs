@@ -232,6 +232,76 @@ public class BufferPoolManager
     }
 
     /// <summary>
+    /// Execute UPDATE query
+    /// </summary>
+    public int UpdateRows(SqlParser parser)
+    {
+        var data = ReadOrWriteOnDisk();
+        
+        if (!data.Tables.ContainsKey(parser.Table))
+        {
+            throw new Exception($"Table '{parser.Table}' does not exist.");
+        }
+
+        if (!data.Rows.ContainsKey(parser.Table))
+        {
+            return 0; // No rows to update
+        }
+
+        var rows = data.Rows[parser.Table];
+        var tableSchema = data.Tables[parser.Table];
+        int updatedCount = 0;
+
+        // Validate that all columns in SET clause exist in schema
+        foreach (var key in parser.Keys)
+        {
+            if (!tableSchema.ContainsKey(key))
+            {
+                throw new Exception($"Column '{key}' does not exist in table '{parser.Table}'.");
+            }
+        }
+
+        // Prepare update values with proper types
+        var updateValues = new Dictionary<string, object>();
+        for (int i = 0; i < parser.Keys.Count; i++)
+        {
+            string columnName = parser.Keys[i];
+            string columnType = tableSchema[columnName];
+            updateValues[columnName] = ParseType(parser.Values[i], columnType);
+        }
+
+        // Update matching rows
+        foreach (var row in rows)
+        {
+            bool shouldUpdate = true;
+
+            // If WHERE conditions exist: check if row matches
+            if (parser.WhereConditions.Count > 0)
+            {
+                shouldUpdate = EvaluateAllConditions(row, parser.WhereConditions, tableSchema);
+            }
+
+            if (shouldUpdate)
+            {
+                // Apply updates to this row
+                foreach (var kvp in updateValues)
+                {
+                    row[kvp.Key] = kvp.Value;
+                }
+                updatedCount++;
+            }
+        }
+
+        if (updatedCount > 0)
+        {
+            _isDirty = true;
+            ReadOrWriteOnDisk();
+        }
+
+        return updatedCount;
+    }
+
+    /// <summary>
     /// Evaluate all WHERE conditions for a single row
     /// </summary>
     private bool EvaluateAllConditions(
