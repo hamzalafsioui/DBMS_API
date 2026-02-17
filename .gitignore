@@ -1,3 +1,21 @@
-.vscode/
+# .NET
 bin/
 obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# VS Code
+.vscode/
+
+# Visual Studio
+.vs/
+
+# Databases
+databases_list/
+*.json.bak
+
+# Secrets & Environment
+appsettings.Development.json
+.env
