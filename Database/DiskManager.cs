@@ -55,5 +55,16 @@ public class DiskManager
 public class DatabasePage
 {
     public Dictionary<string, Dictionary<string, string>> Tables { get; set; } = new();
-    public Dictionary<string, List<Dictionary<string, object>>> Rows { get; set; } = new();
+    public Dictionary<string, List<Dictionary<string, object?>>> Rows { get; set; } = new();
+    public Dictionary<string, PrimaryKeyInfo> PrimaryKeys { get; set; } = new();
 }
+
+
+/// <summary>
+/// Represents the primary key information structure
+/// </summary>
+public class PrimaryKeyInfo
+{
+    public List<string> Columns { get; set; } = new();
+}
+
