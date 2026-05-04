@@ -23,6 +23,7 @@ public class SqlParser
     public List<string> KeyTypes { get; private set; } = new();
     public List<string> Values { get; private set; } = new();
     public List<string> PrimaryKeys { get; private set; } = new();
+    public string? AutoIncrementColumn { get; private set; }
     public List<WhereCondition> WhereConditions { get; private set; } = new();
 
     public SqlParser(string query)
@@ -191,6 +192,12 @@ public class SqlParser
             if (field.ToUpper().Contains("PRIMARY KEY") && !PrimaryKeys.Contains(colName))
             {
                 PrimaryKeys.Add(colName);
+            }
+
+            // Check for AUTO_INCREMENT
+            if (field.ToUpper().Contains("AUTO_INCREMENT"))
+            {
+                AutoIncrementColumn = colName;
             }
         }
     }
