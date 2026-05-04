@@ -112,6 +112,8 @@ public class BufferPoolManager
             providedData[parser.Keys[i]] = parser.Values[i];
         }
 
+        PrimaryKeyInfo? pkInfo = _page.PrimaryKeys.ContainsKey(parser.Table) ? _page.PrimaryKeys[parser.Table] : null;
+
         // Iterate through ALL schema columns to ensure distinct rows
         foreach (var column in tableSchema)
         {
@@ -120,7 +122,23 @@ public class BufferPoolManager
 
             if (providedData.ContainsKey(colName))
             {
-                obj[colName] = ParseType(providedData[colName], colType);
+                var val = ParseType(providedData[colName], colType);
+                obj[colName] = val;
+
+                // Update auto_increment counter if a value was provided manually
+                if (pkInfo?.AutoIncrementColumn == colName && val is int intVal)
+                {
+                    if (intVal >= pkInfo.NextValue)
+                    {
+                        pkInfo.NextValue = intVal + 1;
+                    }
+                }
+            }
+            else if (pkInfo?.AutoIncrementColumn == colName)
+            {
+                // Automatically assign auto_increment value
+                obj[colName] = pkInfo.NextValue;
+                pkInfo.NextValue++;
             }
             else
             {
@@ -130,10 +148,8 @@ public class BufferPoolManager
         }
 
         // Check for Primary Key violation
-        if (_page.PrimaryKeys.ContainsKey(parser.Table))
+        if (pkInfo != null)
         {
-            var pkInfo = _page.PrimaryKeys[parser.Table];
-
             // Ensure PK columns are NOT NULL
             foreach (var col in pkInfo.Columns)
             {
@@ -175,9 +191,13 @@ public class BufferPoolManager
         _page.Tables[parser.Table] = obj;
 
         // Store primary key information if provided
-        if (parser.PrimaryKeys.Count > 0)
+        if (parser.PrimaryKeys.Count > 0 || !string.IsNullOrEmpty(parser.AutoIncrementColumn))
         {
-            _page.PrimaryKeys[parser.Table] = new PrimaryKeyInfo { Columns = parser.PrimaryKeys };
+            _page.PrimaryKeys[parser.Table] = new PrimaryKeyInfo 
+            { 
+                Columns = parser.PrimaryKeys,
+                AutoIncrementColumn = parser.AutoIncrementColumn
+            };
         }
 
         _isDirty = true;
