@@ -66,5 +66,7 @@ public class DatabasePage
 public class PrimaryKeyInfo
 {
     public List<string> Columns { get; set; } = new();
+    public string? AutoIncrementColumn { get; set; }
+    public int NextValue { get; set; } = 1;
 }
 
