@@ -60,7 +60,7 @@ public class SqlExecution
         return $"OK: {updatedCount} Row(s) Updated !";
     }
 
-    private List<Dictionary<string, object>> HandleSelect(SqlParser parser)
+    private List<Dictionary<string, object?>> HandleSelect(SqlParser parser)
     {
         return _buffer.SelectRows(parser);
     }
