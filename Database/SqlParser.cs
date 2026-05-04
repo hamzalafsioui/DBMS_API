@@ -22,15 +22,23 @@ public class SqlParser
     public List<string> Keys { get; private set; } = new();
     public List<string> KeyTypes { get; private set; } = new();
     public List<string> Values { get; private set; } = new();
+    public List<string> PrimaryKeys { get; private set; } = new();
     public List<WhereCondition> WhereConditions { get; private set; } = new();
 
     public SqlParser(string query)
     {
-        // Normalize query => add spaces around operators to ensure correct tokenization
-        // Handles cases like "age=24" or "age>=24"
-        query = Regex.Replace(query, @"(>=|<=|!=|=|>|<)", " $1 ");
+        // Pre-process => remove trailing semicolon if it exists
+        query = query.Trim().TrimEnd(';');
 
-        var tokens = query.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        // Normalize query => add spaces around symbols to ensure correct tokenization
+        query = Regex.Replace(query, @"(>=|<=|!=|=|>|<|\(|\)|,)", " $1 ");
+
+        // Tokenize query => split by whitespace but keep quoted strings together
+        var tokens = Regex.Matches(query, @"'[^']*'|""[^""]*""|\S+")
+                          .Cast<Match>()
+                          .Select(m => m.Value)
+                          .ToArray();
+
         if (tokens.Length == 0) return;
 
         MethodType = tokens[0].ToUpper();
@@ -71,7 +79,7 @@ public class SqlParser
     private void ParseSelect(string[] tokens)
     {
         string fullQuery = string.Join(" ", tokens);
-        var match = Regex.Match(fullQuery, @"SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.*))?", RegexOptions.IgnoreCase);
+        var match = Regex.Match(fullQuery, @"SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.*))?", RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
         if (match.Success)
         {
@@ -111,7 +119,7 @@ public class SqlParser
         // Combine tokens to get a full string for regex matching, but tokens already had spaces around operators
         string fullQuery = string.Join(" ", tokens);
         
-        var match = Regex.Match(fullQuery, @"INSERT\s+INTO\s+(\w+)\s*\((.*?)\)\s*VALUES\s*\((.*)\)", RegexOptions.IgnoreCase);
+        var match = Regex.Match(fullQuery, @"INSERT\s+INTO\s+(\w+)\s*\((.*?)\)\s*VALUES\s*\((.*)\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         
         if (!match.Success)
         {
@@ -141,7 +149,13 @@ public class SqlParser
     private void ParseCreateTable(string[] tokens)
     {
         string fullQuery = string.Join(" ", tokens);
-        var match = Regex.Match(fullQuery, @"CREATE\s+TABLE\s+(\w+)\s*\((.*)\)", RegexOptions.IgnoreCase);
+        var match = Regex.Match(fullQuery, @"CREATE\s+TABLE\s+(\w+)\s*\(\s*(.*)\s*\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+        if (!match.Success)
+        {
+            // Fallback for cases where parentheses might have spaces
+            match = Regex.Match(fullQuery, @"CREATE\s+TABLE\s+(\w+).*\(\s*(.*)\s*\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        }
 
         if (!match.Success)
         {
@@ -149,15 +163,35 @@ public class SqlParser
         }
 
         Table = match.Groups[1].Value;
-        string fieldsStr = match.Groups[2].Value.TrimEnd(';', ' ', ')');
+        string fieldsContent = match.Groups[2].Value.Trim();
+        
+        // Handle PRIMARY KEY (...) at the end if it exists
+        var pkMatch = Regex.Match(fieldsContent, @"PRIMARY\s+KEY\s*\((.*?)\)", RegexOptions.IgnoreCase);
+        if (pkMatch.Success)
+        {
+            var pkCols = pkMatch.Groups[1].Value.Split(',').Select(c => c.Trim()).ToList();
+            PrimaryKeys.AddRange(pkCols);
+            // Remove the PK constraint from fields string to parse columns normally
+            fieldsContent = Regex.Replace(fieldsContent, @"PRIMARY\s+KEY\s*\(.*?\)", "", RegexOptions.IgnoreCase).Trim();
+            fieldsContent = fieldsContent.TrimEnd(',');
+        }
 
-        foreach (var field in fieldsStr.Split(','))
+        foreach (var field in fieldsContent.Split(','))
         {
             var parts = field.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 2) continue;
             
-            Keys.Add(parts[0].Trim());
-            KeyTypes.Add(parts[1].Trim());
+            string colName = parts[0].Trim();
+            string colType = parts[1].Trim();
+            
+            Keys.Add(colName);
+            KeyTypes.Add(colType);
+
+            // Check for inline PRIMARY KEY
+            if (field.ToUpper().Contains("PRIMARY KEY") && !PrimaryKeys.Contains(colName))
+            {
+                PrimaryKeys.Add(colName);
+            }
         }
     }
 
@@ -180,7 +214,7 @@ public class SqlParser
     private void ParseDelete(string[] tokens)
     {
         string fullQuery = string.Join(" ", tokens);
-        var match = Regex.Match(fullQuery, @"DELETE\s+FROM\s+(\w+)(?:\s+WHERE\s+(.*))?" , RegexOptions.IgnoreCase);
+        var match = Regex.Match(fullQuery, @"DELETE\s+FROM\s+(\w+)(?:\s+WHERE\s+(.*))?" , RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
         if (!match.Success)
         {
@@ -210,7 +244,7 @@ public class SqlParser
     private void ParseUpdate(string[] tokens)
     {
         string fullQuery = string.Join(" ", tokens);
-        var match = Regex.Match(fullQuery, @"UPDATE\s+(\w+)\s+SET\s+(.*?)(?:\s+WHERE\s+(.*))?$", RegexOptions.IgnoreCase);
+        var match = Regex.Match(fullQuery, @"UPDATE\s+(\w+)\s+SET\s+(.*?)(?:\s+WHERE\s+(.*))?$", RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
         if (!match.Success)
         {
