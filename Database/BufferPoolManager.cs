@@ -44,7 +44,7 @@ public class BufferPoolManager
     /// <summary>
     /// Execute SELECT query
     /// </summary>
-    public List<Dictionary<string, object>> SelectRows(SqlParser parser)
+    public List<Dictionary<string, object?>> SelectRows(SqlParser parser)
     {
         var data = ReadOrWriteOnDisk();
         
@@ -55,7 +55,7 @@ public class BufferPoolManager
 
         if (!data.Rows.ContainsKey(parser.Table))
         {
-            return new List<Dictionary<string, object>>();
+            return new List<Dictionary<string, object?>>();
         }
 
         var rows = data.Rows[parser.Table];
@@ -73,10 +73,10 @@ public class BufferPoolManager
         }
 
         // SELECT specific columns
-        var selectedRows = new List<Dictionary<string, object>>();
+        var selectedRows = new List<Dictionary<string, object?>>();
         foreach (var row in rows)
         {
-            var obj = new Dictionary<string, object>();
+            var obj = new Dictionary<string, object?>();
             foreach (var key in parser.Keys)
             {
                 if (row.ContainsKey(key))
@@ -103,7 +103,7 @@ public class BufferPoolManager
         }
 
         var tableSchema = data.Tables[parser.Table];
-        var obj = new Dictionary<string, object>();
+        var obj = new Dictionary<string, object?>();
 
         // Map provided values for easy lookup
         var providedData = new Dictionary<string, string>();
@@ -129,9 +129,30 @@ public class BufferPoolManager
             }
         }
 
+        // Check for Primary Key violation
+        if (_page.PrimaryKeys.ContainsKey(parser.Table))
+        {
+            var pkInfo = _page.PrimaryKeys[parser.Table];
+
+            // Ensure PK columns are NOT NULL
+            foreach (var col in pkInfo.Columns)
+            {
+                if (obj[col] == null)
+                {
+                    throw new Exception($"Primary Key Violation: Column '{col}' cannot be NULL.");
+                }
+            }
+
+            if (CheckPrimaryKeyViolation(parser.Table, obj, pkInfo.Columns))
+            {
+                var pkValues = string.Join(", ", pkInfo.Columns.Select(c => $"{c}='{obj[c]}'"));
+                throw new Exception($"Primary Key Violation: A row with {pkValues} already exists in table '{parser.Table}'.");
+            }
+        }
+
         if (!_page.Rows.ContainsKey(parser.Table))
         {
-            _page.Rows[parser.Table] = new List<Dictionary<string, object>>();
+            _page.Rows[parser.Table] = new List<Dictionary<string, object?>>();
         }
 
         _page.Rows[parser.Table].Add(obj);
@@ -152,6 +173,13 @@ public class BufferPoolManager
         }
 
         _page.Tables[parser.Table] = obj;
+
+        // Store primary key information if provided
+        if (parser.PrimaryKeys.Count > 0)
+        {
+            _page.PrimaryKeys[parser.Table] = new PrimaryKeyInfo { Columns = parser.PrimaryKeys };
+        }
+
         _isDirty = true;
         ReadOrWriteOnDisk();
     }
@@ -205,7 +233,7 @@ public class BufferPoolManager
         }
 
         // Filter rows to keep (inverse of rows to delete)
-        var rowsToKeep = new List<Dictionary<string, object>>();
+        var rowsToKeep = new List<Dictionary<string, object?>>();
         var tableSchema = data.Tables[parser.Table];
 
         foreach (var row in rows)
@@ -262,7 +290,7 @@ public class BufferPoolManager
         }
 
         // Prepare update values with proper types
-        var updateValues = new Dictionary<string, object>();
+        var updateValues = new Dictionary<string, object?>();
         for (int i = 0; i < parser.Keys.Count; i++)
         {
             string columnName = parser.Keys[i];
@@ -283,7 +311,37 @@ public class BufferPoolManager
 
             if (shouldUpdate)
             {
-                // Apply updates to this row
+                // Create a copy of the row to check for PK violation before applying changes
+                var updatedRow = new Dictionary<string, object?>(row);
+                foreach (var kvp in updateValues)
+                {
+                    updatedRow[kvp.Key] = kvp.Value;
+                }
+
+                // Check for PK violation if PK columns are being updated
+                if (_page.PrimaryKeys.ContainsKey(parser.Table))
+                {
+                    var pkInfo = _page.PrimaryKeys[parser.Table];
+
+                    // Ensure PK columns are NOT NULL
+                    foreach (var col in pkInfo.Columns)
+                    {
+                        if (updatedRow[col] == null)
+                        {
+                            throw new Exception($"Primary Key Violation: Column '{col}' cannot be NULL.");
+                        }
+                    }
+
+                    bool pkChanged = pkInfo.Columns.Any(c => updateValues.ContainsKey(c));
+                    
+                    if (pkChanged && CheckPrimaryKeyViolation(parser.Table, updatedRow, pkInfo.Columns, row))
+                    {
+                         var pkValues = string.Join(", ", pkInfo.Columns.Select(c => $"{c}='{updatedRow[c]}'"));
+                         throw new Exception($"Primary Key Violation: A row with {pkValues} already exists in table '{parser.Table}'.");
+                    }
+                }
+
+                // Apply updates to the original row
                 foreach (var kvp in updateValues)
                 {
                     row[kvp.Key] = kvp.Value;
@@ -305,7 +363,7 @@ public class BufferPoolManager
     /// Evaluate all WHERE conditions for a single row
     /// </summary>
     private bool EvaluateAllConditions(
-        Dictionary<string, object> row,
+        Dictionary<string, object?> row,
         List<WhereCondition> conditions,
         Dictionary<string, string> tableSchema)
     {
@@ -338,12 +396,12 @@ public class BufferPoolManager
     /// <summary>
     /// Filter rows based on WHERE conditions
     /// </summary>
-    private List<Dictionary<string, object>> FilterRowsByWhereConditions(
-        List<Dictionary<string, object>> rows, 
+    private List<Dictionary<string, object?>> FilterRowsByWhereConditions(
+        List<Dictionary<string, object?>> rows, 
         List<WhereCondition> conditions,
         Dictionary<string, string> tableSchema)
     {
-        var filteredRows = new List<Dictionary<string, object>>();
+        var filteredRows = new List<Dictionary<string, object?>>();
 
         foreach (var row in rows)
         {
@@ -387,7 +445,7 @@ public class BufferPoolManager
     /// Evaluate a single WHERE condition
     /// </summary>
     private bool EvaluateCondition(
-        Dictionary<string, object> row, 
+        Dictionary<string, object?> row, 
         WhereCondition condition,
         Dictionary<string, string> tableSchema)
     {
@@ -438,8 +496,13 @@ public class BufferPoolManager
     /// <summary>
     /// Compare two values of the same type
     /// </summary>
-    private int CompareValues(object value1, object value2)
+    private int CompareValues(object? value1, object? value2)
     {
+        // Handle nulls
+        if (value1 == null && value2 == null) return 0;
+        if (value1 == null) return -1;
+        if (value2 == null) return 1;
+
         // Handle JsonElement from disk deserialization
         if (value1 is JsonElement json1)
         {
@@ -482,6 +545,37 @@ public class BufferPoolManager
         
         // Fallback: convert both to string if types mismatch
         return string.Compare(value1?.ToString(), value2?.ToString(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Check if a row with the same primary key values already exists
+    /// </summary>
+    private bool CheckPrimaryKeyViolation(string tableName, Dictionary<string, object?> newRow, List<string> pkColumns, Dictionary<string, object?>? currentRow = null)
+    {
+        if (!_page.Rows.ContainsKey(tableName)) return false;
+
+        foreach (var existingRow in _page.Rows[tableName])
+        {
+            // If we are updating => we dont compare the row with itself
+            if (currentRow != null && ReferenceEquals(existingRow, currentRow)) continue;
+
+            bool allMatch = true;
+            foreach (var col in pkColumns)
+            {
+                var val1 = existingRow.ContainsKey(col) ? existingRow[col] : null;
+                var val2 = newRow.ContainsKey(col) ? newRow[col] : null;
+
+                if (CompareValues(val1, val2) != 0)
+                {
+                    allMatch = false;
+                    break;
+                }
+            }
+
+            if (allMatch) return true;
+        }
+
+        return false;
     }
 
     /// <summary>
