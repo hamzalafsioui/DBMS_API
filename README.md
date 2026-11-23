@@ -71,27 +71,35 @@ DBMS_API/
 │   ├── SqlExecution.cs        #   Query execution router
 │   ├── BufferPoolManager.cs   #   In-memory data + dirty page tracking
 │   ├── DiskManager.cs         #   JSON read/write to disk
+│   ├── Dockerfile             #   Docker container definition for DBMS Server
 │   └── Database.csproj        #   Project file
 │
 ├── Client/                    # 💻 CLI Client
 │   ├── Program.cs             #   Entry point — prompts for DB name
 │   ├── DbClient.cs            #   TCP client with REPL loop
+│   ├── Dockerfile             #   Docker container definition for CLI Client
 │   └── Client.csproj          #   Project file
 │
 ├── Api/                       # 🌐 REST API Bridge
 │   ├── Program.cs             #   ASP.NET Minimal API (POST /query)
 │   ├── DbClientService.cs     #   TCP client service for API
+│   ├── Dockerfile             #   Docker container definition for REST API
 │   └── Api.csproj             #   Project file
 │
 ├── Frontend/                  # 🎨 Web UI
 │   ├── index.html             #   Main page
 │   ├── style.css              #   Dark theme styling
-│   └── app.js                 #   Frontend logic (fetch + table render)
+│   ├── app.js                 #   Frontend logic (fetch + table render)
+│   ├── nginx.conf             #   Nginx web server configuration
+│   └── Dockerfile             #   Docker container definition for Web UI
 │
 ├── databases_list/            # 📂 Data storage (JSON files)
 ├── queries.sql                # 📝 Sample SQL queries
 ├── presentation.txt           # 📄 Project presentation (French)
 ├── DBMS.sln                   # Visual Studio solution file
+├── docker-compose.yml         # 🐳 Multi-container orchestration
+├── .dockerignore              # Docker build exclusions
+├── .env.example               # Example environment configuration
 └── README.md                  # This file
 ```
 
@@ -99,11 +107,43 @@ DBMS_API/
 
 ## ⚙️ Requirements
 
-- **.NET 8.0 SDK** or later
+- **Docker & Docker Compose** (Recommended for easiest setup), **OR**
+- **.NET 10.0 SDK** (for running locally without containers)
 
 ---
 
-## 🚀 How to Use
+## 🐳 Quick Start with Docker (Recommended)
+
+Run the entire system (Database Server, REST API, and Web UI) with a single command:
+
+```bash
+docker compose up -d
+```
+*(or `docker-compose up -d` depending on your Docker installation)*
+
+This starts:
+- **Database Server** on TCP port `9090`
+- **REST API** on HTTP port `5232`
+- **Web UI** on HTTP port `3000` (open [http://localhost:3000](http://localhost:3000) in your browser)
+- **Data Persistence**: Database JSON files are mounted directly to `./databases_list/`
+
+### Interactive CLI Client via Docker
+
+To interact with the running database using the console REPL inside Docker:
+
+```bash
+docker compose run --rm client
+```
+
+### Stop Containers
+
+```bash
+docker compose down
+```
+
+---
+
+## 🚀 Running Locally (Without Docker)
 
 ### 1. Clone the Repository
 
