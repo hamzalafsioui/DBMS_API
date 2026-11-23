@@ -2,7 +2,7 @@
 
 A simple, educational Database Management System built from scratch in **C#**. This project demonstrates how a real database engine works internally from SQL parsing to data persistence on disk with multiple ways to interact with it (CLI, REST API, Web UI).
 
-> **Version 1.0** — Supports `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `CREATE TABLE`, `DROP TABLE`, and `WHERE` clause.
+> **Version 1.0.0** | Supports `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `CREATE TABLE`, `DROP TABLE`, `PRIMARY KEY`, `AUTO_INCREMENT`, and `WHERE` clause.
 
 ---
 
@@ -224,6 +224,7 @@ curl -X POST http://localhost:5232/query \
 | Command                     | Syntax                                   | Example                                                              |
 | --------------------------- | ---------------------------------------- | -------------------------------------------------------------------- |
 | **CREATE TABLE**            | `CREATE TABLE name (col TYPE, ...);`     | `CREATE TABLE users (username VARCHAR,age INT,salary FLOAT);`        |
+| **CREATE TABLE (PK & Auto)**| `CREATE TABLE name (id INT AUTO_INCREMENT PRIMARY KEY, ...);` | `CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR);` |
 | **INSERT INTO**             | `INSERT INTO name (cols) VALUES (vals);` | `INSERT INTO users (username,age,salary) VALUES ('hamza',24,100.0);` |
 | **SELECT \***               | `SELECT * FROM name;`                    | `SELECT * FROM users;`                                               |
 | **SELECT columns**          | `SELECT col1,col2 FROM name;`            | `SELECT username,age FROM users;`                                    |
@@ -234,6 +235,47 @@ curl -X POST http://localhost:5232/query \
 | **DELETE**                  | `DELETE FROM name [WHERE ...];`          | `DELETE FROM users WHERE age < 25;`                                  |
 | **DELETE (all rows)**       | `DELETE FROM name;`                      | `DELETE FROM users;`                                                 |
 | **DROP TABLE**              | `DROP TABLE name;`                       | `DROP TABLE users;`                                                  |
+
+---
+
+## 🔑 Primary Keys & AUTO_INCREMENT
+
+The DBMS supports primary keys, uniqueness constraints, and automatic sequential ID generation:
+
+### Key Features
+- **Auto-Sequence Generation**: Omitting the auto-increment column automatically assigns the next available integer (starts at `1`).
+- **Trigger with NULL or 0**: Explicitly passing `NULL` or `0` for an `AUTO_INCREMENT` column triggers automatic generation.
+- **Manual Sequence Advance**: Inserting an explicit higher value (e.g. `10`) advances the sequence so subsequent inserts continue from `11`.
+- **Constraint Enforcement**: Duplicate primary key values are rejected with a `Primary Key Violation`.
+- **Flexible Syntax**: Supports MySQL-style `AUTO_INCREMENT`, SQLite-style `AUTOINCREMENT`, and `AUTO INCREMENT`.
+
+### Syntax Options
+- `id INT AUTO_INCREMENT PRIMARY KEY` (Inline primary key + auto-increment)
+- `id INT AUTO_INCREMENT` (Implicitly treated as primary key)
+- `PRIMARY KEY (col1, col2)` (Table constraint syntax for single or composite keys)
+
+### Examples
+
+```sql
+-- Create table with auto-increment primary key
+CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR, age INT);
+
+-- 1. Auto-assign IDs (1, 2, ...) by omitting the column
+INSERT INTO users (name, age) VALUES ('hamza', 24);
+INSERT INTO users (name, age) VALUES ('moha', 28);
+
+-- 2. Trigger auto-assignment using NULL or 0
+INSERT INTO users (id, name, age) VALUES (NULL, 'ayoub', 30); -- Gets id = 3
+INSERT INTO users (id, name, age) VALUES (0, 'ahmed', 22);     -- Gets id = 4
+
+-- 3. Manual ID override
+INSERT INTO users (id, name, age) VALUES (10, 'boss', 35);    -- Sequence advances to 11
+INSERT INTO users (name, age) VALUES ('next', 20);            -- Gets id = 11
+
+-- 4. Duplicate ID protection
+INSERT INTO users (id, name, age) VALUES (10, 'duplicate', 40);
+-- Error: Primary Key Violation: A row with id='10' already exists in table 'users'.
+```
 
 ---
 
