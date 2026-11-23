@@ -20,6 +20,20 @@ public class BufferPoolManager
         if (_diskManager.Exists(database))
         {
             _page = _diskManager.Read(database);
+            foreach (var kvp in _page.PrimaryKeys)
+            {
+                var pk = kvp.Value;
+                if (pk.Columns.Count == 0 && !string.IsNullOrEmpty(pk.AutoIncrementColumn))
+                {
+                    pk.Columns.Add(pk.AutoIncrementColumn);
+                    _isDirty = true;
+                }
+                EnsureNextValueSynchronized(kvp.Key, pk);
+            }
+            if (_isDirty)
+            {
+                ReadOrWriteOnDisk();
+            }
         }
         else
         {
@@ -115,6 +129,11 @@ public class BufferPoolManager
         PrimaryKeyInfo? pkInfo = _page.PrimaryKeys.ContainsKey(parser.Table) ? _page.PrimaryKeys[parser.Table] : null;
         if (pkInfo != null)
         {
+            if (pkInfo.Columns.Count == 0 && !string.IsNullOrEmpty(pkInfo.AutoIncrementColumn))
+            {
+                pkInfo.Columns.Add(pkInfo.AutoIncrementColumn);
+                _isDirty = true;
+            }
             EnsureNextValueSynchronized(parser.Table, pkInfo);
         }
 
@@ -216,9 +235,15 @@ public class BufferPoolManager
         // Store primary key information if provided
         if (parser.PrimaryKeys.Count > 0 || !string.IsNullOrEmpty(parser.AutoIncrementColumn))
         {
+            var pkCols = new List<string>(parser.PrimaryKeys);
+            if (pkCols.Count == 0 && !string.IsNullOrEmpty(parser.AutoIncrementColumn))
+            {
+                pkCols.Add(parser.AutoIncrementColumn);
+            }
+
             _page.PrimaryKeys[parser.Table] = new PrimaryKeyInfo 
             { 
-                Columns = parser.PrimaryKeys,
+                Columns = pkCols,
                 AutoIncrementColumn = parser.AutoIncrementColumn,
                 NextValue = 1
             };

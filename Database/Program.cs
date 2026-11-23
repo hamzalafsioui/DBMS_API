@@ -114,6 +114,17 @@ static void RunTests()
         Exec("DROP TABLE users;");
         Console.WriteLine("  -> PASS (Table dropped cleanly)");
 
+        // Test 8: Exact user scenario: create table tests (id INT AUTO_INCREMENT,name string);
+        Console.WriteLine("Test 8: Exact user scenario: create table tests (id INT AUTO_INCREMENT,name string);...");
+        Exec("CREATE TABLE tests (id INT AUTO_INCREMENT,name string);");
+        Exec("insert into tests (name) values (haha);");
+        Exec("insert into tests (name) values (yaya);");
+        rows = Query("SELECT * FROM tests;");
+        if (rows.Count != 2) throw new Exception($"Expected 2 rows in tests, got {rows.Count}");
+        if (Convert.ToInt32(rows[0]["id"]) != 1 || Convert.ToInt32(rows[1]["id"]) != 2)
+            throw new Exception($"Expected id 1 and 2 in tests, got {rows[0]["id"]} and {rows[1]["id"]}");
+        Console.WriteLine("  -> PASS (User scenario works perfectly: id 1 and 2)");
+
         Console.WriteLine("\nALL AUTOINCREMENT TESTS PASSED SUCCESSFULLY! :)");
     }
     finally
