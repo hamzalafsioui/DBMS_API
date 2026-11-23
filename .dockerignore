@@ -1,0 +1,10 @@
+**/.git
+**/.github
+**/.vs
+**/.vscode
+**/bin/
+**/obj/
+**/*.user
+**/*.suo
+**/*.md
+databases_list/*.bak

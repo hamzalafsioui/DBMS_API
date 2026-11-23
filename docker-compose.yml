@@ -1,0 +1,52 @@
+services:
+  db:
+    build:
+      context: .
+      dockerfile: Database/Dockerfile
+    container_name: dbms-database
+    ports:
+      - "${DBMS_PORT:-9090}:9090"
+    volumes:
+      - ./databases_list:/app/databases_list
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Api/Dockerfile
+    container_name: dbms-api
+    ports:
+      - "${API_PORT:-5232}:5232"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=9090
+      - ASPNETCORE_HTTP_PORTS=5232
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Frontend/Dockerfile
+    container_name: dbms-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  client:
+    build:
+      context: .
+      dockerfile: Client/Dockerfile
+    container_name: dbms-client
+    environment:
+      - DBMS_HOST=db
+      - DBMS_PORT=9090
+    stdin_open: true
+    tty: true
+    depends_on:
+      - db
+    profiles:
+      - cli
