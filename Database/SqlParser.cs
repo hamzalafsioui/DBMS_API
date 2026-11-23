@@ -185,19 +185,37 @@ public class SqlParser
             string colName = parts[0].Trim();
             string colType = parts[1].Trim();
             
+            // Normalize column type (strip any size like (255))
+            colType = Regex.Replace(colType, @"\(.*?\)", "").Trim();
+
+            var upperField = field.ToUpperInvariant();
+            bool isAutoIncrement = upperField.Contains("AUTO_INCREMENT") || 
+                                   upperField.Contains("AUTOINCREMENT") || 
+                                   Regex.IsMatch(upperField, @"\bAUTO\s+INCREMENT\b");
+
+            if (colType.Equals("AUTO_INCREMENT", StringComparison.OrdinalIgnoreCase) || 
+                colType.Equals("AUTOINCREMENT", StringComparison.OrdinalIgnoreCase))
+            {
+                colType = parts.Length > 2 ? Regex.Replace(parts[2], @"\(.*?\)", "").Trim() : "INT";
+            }
+
             Keys.Add(colName);
             KeyTypes.Add(colType);
 
             // Check for inline PRIMARY KEY
-            if (field.ToUpper().Contains("PRIMARY KEY") && !PrimaryKeys.Contains(colName))
+            if (upperField.Contains("PRIMARY KEY") && !PrimaryKeys.Contains(colName))
             {
                 PrimaryKeys.Add(colName);
             }
 
             // Check for AUTO_INCREMENT
-            if (field.ToUpper().Contains("AUTO_INCREMENT"))
+            if (isAutoIncrement)
             {
                 AutoIncrementColumn = colName;
+                if (!PrimaryKeys.Contains(colName))
+                {
+                    PrimaryKeys.Add(colName);
+                }
             }
         }
     }

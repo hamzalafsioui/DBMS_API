@@ -113,6 +113,10 @@ public class BufferPoolManager
         }
 
         PrimaryKeyInfo? pkInfo = _page.PrimaryKeys.ContainsKey(parser.Table) ? _page.PrimaryKeys[parser.Table] : null;
+        if (pkInfo != null)
+        {
+            EnsureNextValueSynchronized(parser.Table, pkInfo);
+        }
 
         // Iterate through ALL schema columns to ensure distinct rows
         foreach (var column in tableSchema)
@@ -120,24 +124,42 @@ public class BufferPoolManager
             string colName = column.Key;
             string colType = column.Value;
 
-            if (providedData.ContainsKey(colName))
-            {
-                var val = ParseType(providedData[colName], colType);
-                obj[colName] = val;
+            bool isAutoIncCol = pkInfo?.AutoIncrementColumn == colName;
+            bool isProvided = providedData.ContainsKey(colName);
+            string? rawVal = isProvided ? providedData[colName]?.Trim() : null;
+            bool isNullOrEmpty = string.IsNullOrEmpty(rawVal) || (rawVal != null && rawVal.Equals("NULL", StringComparison.OrdinalIgnoreCase));
 
-                // Update auto_increment counter if a value was provided manually
-                if (pkInfo?.AutoIncrementColumn == colName && val is int intVal)
+            if (isAutoIncCol && (isNullOrEmpty || rawVal == "0"))
+            {
+                // Auto-generate value if omitted, NULL, or 0
+                obj[colName] = pkInfo!.NextValue;
+                pkInfo.NextValue++;
+            }
+            else if (isProvided)
+            {
+                if (isNullOrEmpty)
                 {
-                    if (intVal >= pkInfo.NextValue)
+                    obj[colName] = null;
+                }
+                else
+                {
+                    var val = ParseType(rawVal!, colType);
+                    obj[colName] = val;
+
+                    // Update auto_increment counter if a value was provided manually
+                    if (isAutoIncCol && val is int intVal)
                     {
-                        pkInfo.NextValue = intVal + 1;
+                        if (intVal >= pkInfo!.NextValue)
+                        {
+                            pkInfo.NextValue = intVal + 1;
+                        }
                     }
                 }
             }
-            else if (pkInfo?.AutoIncrementColumn == colName)
+            else if (isAutoIncCol)
             {
-                // Automatically assign auto_increment value
-                obj[colName] = pkInfo.NextValue;
+                // Automatically assign auto_increment value when column is omitted
+                obj[colName] = pkInfo!.NextValue;
                 pkInfo.NextValue++;
             }
             else
@@ -189,6 +211,7 @@ public class BufferPoolManager
         }
 
         _page.Tables[parser.Table] = obj;
+        _page.Rows[parser.Table] = new List<Dictionary<string, object?>>();
 
         // Store primary key information if provided
         if (parser.PrimaryKeys.Count > 0 || !string.IsNullOrEmpty(parser.AutoIncrementColumn))
@@ -196,7 +219,8 @@ public class BufferPoolManager
             _page.PrimaryKeys[parser.Table] = new PrimaryKeyInfo 
             { 
                 Columns = parser.PrimaryKeys,
-                AutoIncrementColumn = parser.AutoIncrementColumn
+                AutoIncrementColumn = parser.AutoIncrementColumn,
+                NextValue = 1
             };
         }
 
@@ -218,7 +242,12 @@ public class BufferPoolManager
         {
             _page.Rows.Remove(parser.Table);
         }
-        
+
+        if (_page.PrimaryKeys.ContainsKey(parser.Table))
+        {
+            _page.PrimaryKeys.Remove(parser.Table);
+        }
+
         _isDirty = true;
         ReadOrWriteOnDisk();
     }
@@ -358,6 +387,17 @@ public class BufferPoolManager
                     {
                          var pkValues = string.Join(", ", pkInfo.Columns.Select(c => $"{c}='{updatedRow[c]}'"));
                          throw new Exception($"Primary Key Violation: A row with {pkValues} already exists in table '{parser.Table}'.");
+                    }
+
+                    // Synchronize NextValue if an auto-increment column was updated manually
+                    if (!string.IsNullOrEmpty(pkInfo.AutoIncrementColumn) && 
+                        updateValues.ContainsKey(pkInfo.AutoIncrementColumn) && 
+                        updateValues[pkInfo.AutoIncrementColumn] is int newIntVal)
+                    {
+                        if (newIntVal >= pkInfo.NextValue)
+                        {
+                            pkInfo.NextValue = newIntVal + 1;
+                        }
                     }
                 }
 
@@ -526,17 +566,35 @@ public class BufferPoolManager
         // Handle JsonElement from disk deserialization
         if (value1 is JsonElement json1)
         {
-            try 
+            if (json1.ValueKind == JsonValueKind.Null) return value2 == null ? 0 : -1;
+            if (value2 is int) value1 = json1.GetInt32();
+            else if (value2 is double) value1 = json1.GetDouble();
+            else if (value2 is string) value1 = json1.GetString() ?? string.Empty;
+            else if (json1.ValueKind == JsonValueKind.Number)
             {
-                if (value2 is int) value1 = json1.GetInt32();
-                else if (value2 is double) value1 = json1.GetDouble();
-                else if (value2 is string) value1 = json1.GetString() ?? string.Empty;
+                if (json1.TryGetInt32(out var i)) value1 = i;
+                else if (json1.TryGetDouble(out var d)) value1 = d;
             }
-            catch
+            else if (json1.ValueKind == JsonValueKind.String)
             {
-                // If conversion fails => Fallback: convert both to string if types mismatch
-                return string.Compare(value1?.ToString(), value2?.ToString(), StringComparison.Ordinal);
+                value1 = json1.GetString() ?? string.Empty;
+            }
+        }
 
+        if (value2 is JsonElement json2)
+        {
+            if (json2.ValueKind == JsonValueKind.Null) return value1 == null ? 0 : 1;
+            if (value1 is int) value2 = json2.GetInt32();
+            else if (value1 is double) value2 = json2.GetDouble();
+            else if (value1 is string) value2 = json2.GetString() ?? string.Empty;
+            else if (json2.ValueKind == JsonValueKind.Number)
+            {
+                if (json2.TryGetInt32(out var i)) value2 = i;
+                else if (json2.TryGetDouble(out var d)) value2 = d;
+            }
+            else if (json2.ValueKind == JsonValueKind.String)
+            {
+                value2 = json2.GetString() ?? string.Empty;
             }
         }
 
@@ -572,6 +630,7 @@ public class BufferPoolManager
     /// </summary>
     private bool CheckPrimaryKeyViolation(string tableName, Dictionary<string, object?> newRow, List<string> pkColumns, Dictionary<string, object?>? currentRow = null)
     {
+        if (pkColumns == null || pkColumns.Count == 0) return false;
         if (!_page.Rows.ContainsKey(tableName)) return false;
 
         foreach (var existingRow in _page.Rows[tableName])
@@ -599,15 +658,48 @@ public class BufferPoolManager
     }
 
     /// <summary>
+    /// Synchronize NextValue for auto_increment if it's behind existing rows
+    /// </summary>
+    private void EnsureNextValueSynchronized(string tableName, PrimaryKeyInfo pkInfo)
+    {
+        if (string.IsNullOrEmpty(pkInfo.AutoIncrementColumn)) return;
+        if (!_page.Rows.ContainsKey(tableName)) return;
+
+        int maxVal = 0;
+        foreach (var row in _page.Rows[tableName])
+        {
+            if (row.TryGetValue(pkInfo.AutoIncrementColumn, out var val) && val != null)
+            {
+                int intVal = 0;
+                if (val is int i) intVal = i;
+                else if (val is JsonElement je && je.ValueKind == JsonValueKind.Number) je.TryGetInt32(out intVal);
+                else if (int.TryParse(val.ToString(), out var parsed)) intVal = parsed;
+
+                if (intVal > maxVal) maxVal = intVal;
+            }
+        }
+
+        if (pkInfo.NextValue <= maxVal)
+        {
+            pkInfo.NextValue = maxVal + 1;
+        }
+    }
+
+    /// <summary>
     /// Parse value to appropriate type based on schema
     /// </summary>
-    private object ParseType(string fieldValue, string fieldType)
+    private object? ParseType(string? fieldValue, string fieldType)
     {
+        if (fieldValue == null || fieldValue.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
         return fieldType.ToUpper() switch
         {
-            "INT" => int.Parse(fieldValue),
-            "FLOAT" => double.Parse(fieldValue),
-            "VARCHAR" => fieldValue.Trim('\''),
+            "INT" => int.TryParse(fieldValue, out var i) ? i : (object?)null,
+            "FLOAT" => double.TryParse(fieldValue, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : (object?)null,
+            "VARCHAR" => fieldValue.Trim('\'', '"'),
             _ => fieldValue
         };
     }
