@@ -10,5 +10,9 @@ if (string.IsNullOrEmpty(database))
     return;
 }
 
-var client = new DbClient();
+var host = Environment.GetEnvironmentVariable("DBMS_HOST") ?? "localhost";
+var portStr = Environment.GetEnvironmentVariable("DBMS_PORT");
+int port = int.TryParse(portStr, out var p) ? p : 9090;
+
+var client = new DbClient(host, port);
 client.RunRepl(database);

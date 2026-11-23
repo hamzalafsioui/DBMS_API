@@ -5,7 +5,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddOpenApi();
-builder.Services.AddSingleton<DbClientService>();
+
+var dbHost = builder.Configuration["DB_HOST"] ?? Environment.GetEnvironmentVariable("DB_HOST") ?? "127.0.0.1";
+var dbPortStr = builder.Configuration["DB_PORT"] ?? Environment.GetEnvironmentVariable("DB_PORT");
+int dbPort = int.TryParse(dbPortStr, out var p) ? p : 9090;
+
+builder.Services.AddSingleton(new DbClientService(dbHost, dbPort));
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>

@@ -168,7 +168,21 @@ public class ConnectionHandler
     /// </summary>
     public async Task Run()
     {
-        _server = new TcpListener(IPAddress.Parse("127.0.0.1"), _port);
+        IPAddress ipAddress;
+        if (string.IsNullOrWhiteSpace(_host) || _host == "0.0.0.0")
+        {
+            ipAddress = IPAddress.Any;
+        }
+        else if (_host == "localhost" || _host == "127.0.0.1")
+        {
+            ipAddress = IPAddress.Any;
+        }
+        else if (!IPAddress.TryParse(_host, out ipAddress!))
+        {
+            ipAddress = IPAddress.Any;
+        }
+
+        _server = new TcpListener(ipAddress, _port);
         _server.Start();
         
         Console.WriteLine($"Server Is Listening on: {_host}:{_port}");

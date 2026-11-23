@@ -21,7 +21,8 @@ document.getElementById("executeBtn").addEventListener("click", async () => {
   localStorage.setItem('dbName',dbName);
 
   try {
-    const response = await fetch("http://localhost:5232/query", {
+    const apiUrl = window.API_URL || "http://localhost:5232/query";
+    const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

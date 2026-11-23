@@ -9,9 +9,9 @@ public class DiskManager
 {
     private readonly string _basePath;
 
-    public DiskManager(string basePath = "databases_list")
+    public DiskManager(string? basePath = null)
     {
-        _basePath = basePath;
+        _basePath = basePath ?? Environment.GetEnvironmentVariable("DATA_DIR") ?? "databases_list";
         if (!Directory.Exists(_basePath))
         {
             Directory.CreateDirectory(_basePath);
